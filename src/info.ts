@@ -406,6 +406,7 @@ const getVideoInfoPage = async (id: string, options: GetInfoOptions) => {
   url.searchParams.set("ps", "default");
   url.searchParams.set("gl", "US");
   url.searchParams.set("hl", options.lang || "en");
+  url.searchParams.set('html5', '1');
   let body = await fetch(url.toString(), options).then((e) => e.text());
   let info = querystring.parse(body);
   info.player_response = findPlayerResponse("get_video_info", info);

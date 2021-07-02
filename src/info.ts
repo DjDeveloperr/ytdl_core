@@ -7,6 +7,8 @@ import * as formatUtils from "./format_util.ts";
 import * as extras from "./info_extras.ts";
 import { GetInfoOptions, VideoInfo } from "./types.ts";
 
+let cver = "2.20210622.10.00";
+
 const BASE_URL = "https://www.youtube.com/watch?v=";
 
 export const cache = new Cache();
@@ -27,7 +29,7 @@ const AGE_RESTRICTED_URLS = [
 
 export async function getBasicInfo(
   id: string,
-  options: GetInfoOptions = {}
+  options: GetInfoOptions = {},
 ): Promise<VideoInfo> {
   id = urlUtils.getVideoID(id);
   options.headers = Object.assign(
@@ -36,13 +38,13 @@ export async function getBasicInfo(
       // eslint-disable-next-line max-len
       "User-Agent": USER_AGENT,
     },
-    options.headers
+    options.headers,
   );
   const validate = (info: any) => {
     let playErr = utils.playError(
       info.player_response,
       ["ERROR"],
-      UnrecoverableError as any
+      UnrecoverableError as any,
     );
     let privateErr = privateVideoError(info.player_response);
     if (playErr || privateErr) {
@@ -61,6 +63,8 @@ export async function getBasicInfo(
     getWatchJSONPage,
     getVideoInfoPage,
   ]);
+
+  if (info.player_response === undefined) throw new Error("404 - Not found");
 
   Object.assign(info, {
     formats: parseFormats(info.player_response),
@@ -92,9 +96,9 @@ export async function getBasicInfo(
         info.player_response.microformat &&
         info.player_response.microformat.playerMicroformatRenderer,
       info.player_response && info.player_response.videoDetails,
-      additional
+      additional,
     ),
-    info
+    info,
   );
 
   return info;
@@ -110,7 +114,7 @@ const privateVideoError = (player_response: any) => {
       .length
   ) {
     return new UnrecoverableError(
-      playability.reason || (playability.messages && playability.messages[0])
+      playability.reason || (playability.messages && playability.messages[0]),
     );
   } else {
     return null;
@@ -141,8 +145,7 @@ const getWatchHTMLPageBody = (id: string, options: any) => {
       .then((r) => r.text())
       .then((t) => {
         return t;
-      })
-  );
+      }));
 };
 
 const EMBED_URL = "https://www.youtube.com/embed/";
@@ -152,9 +155,11 @@ const getEmbedPageBody = (id: string, options: GetInfoOptions = {}) => {
 };
 
 const getHTML5player = (body: string) => {
-  let html5playerRes = /<script\s+src="([^"]+)"(?:\s+type="text\/javascript")?\s+name="player_ias\/base"\s*>|"jsUrl":"([^"]+)"/.exec(
-    body
-  );
+  let html5playerRes =
+    /<script\s+src="([^"]+)"(?:\s+type="text\/javascript")?\s+name="player_ias\/base"\s*>|"jsUrl":"([^"]+)"/
+      .exec(
+        body,
+      );
   return html5playerRes ? html5playerRes[1] || html5playerRes[2] : null;
 };
 
@@ -162,14 +167,14 @@ const getIdentityToken = (
   id: string,
   options: any,
   key: string,
-  throwIfNotFound: boolean
+  throwIfNotFound: boolean,
 ) =>
   cookieCache.getOrSet(key, async () => {
     let page = await getWatchHTMLPageBody(id, options);
     let match = page.match(/(["'])ID_TOKEN\1[:,]\s?"([^"]+)"/);
     if (!match && throwIfNotFound) {
       throw new UnrecoverableError(
-        "Cookie header used in request, but unable to find YouTube identity token"
+        "Cookie header used in request, but unable to find YouTube identity token",
       );
     }
     return match && match[2];
@@ -183,7 +188,7 @@ const pipeline = async (
   args: any[],
   validate: CallableFunction,
   retryOptions: any,
-  endpoints: CallableFunction[]
+  endpoints: CallableFunction[],
 ) => {
   let info;
   for (let func of endpoints) {
@@ -192,11 +197,11 @@ const pipeline = async (
       if (newInfo.player_response) {
         newInfo.player_response.videoDetails = assign(
           info && info.player_response && info.player_response.videoDetails,
-          newInfo.player_response.videoDetails
+          newInfo.player_response.videoDetails,
         );
         newInfo.player_response = assign(
           info && info.player_response,
-          newInfo.player_response
+          newInfo.player_response,
         );
       }
       info = assign(info, newInfo);
@@ -266,7 +271,7 @@ const retryFunc = async (func: CallableFunction, args: any[], options: any) => {
       }
       let wait = Math.min(
         ++currentTry * (options.backoff?.inc ?? 0),
-        options.backoff?.max ?? 0
+        options.backoff?.max ?? 0,
       );
       await new Promise((resolve) => setTimeout(resolve, wait));
     }
@@ -294,7 +299,7 @@ const findJSON = (
   body: any,
   left: any,
   right: any,
-  prependJSON: any
+  prependJSON: any,
 ) => {
   let jsonStr = utils.between(body, left, right);
   if (!jsonStr) {
@@ -303,13 +308,12 @@ const findJSON = (
   return parseJSON(
     source,
     varName,
-    utils.cutAfterJSON(`${prependJSON}${jsonStr}`)
+    utils.cutAfterJSON(`${prependJSON}${jsonStr}`),
   );
 };
 
 const findPlayerResponse = (source: any, info: any) => {
-  const player_response =
-    info &&
+  const player_response = info &&
     ((info.args && info.args.player_response) ||
       info.player_response ||
       info.playerResponse ||
@@ -321,15 +325,15 @@ const getWatchJSONURL = (id: string, options: GetInfoOptions) =>
   `${getWatchHTMLURL(id, options)}&pbj=1`;
 const getWatchJSONPage = async (id: string, options: GetInfoOptions) => {
   const reqOptions = Object.assign({ headers: {} }, options);
-  let cookie =
-    (reqOptions.headers as any).Cookie || (reqOptions.headers as any).cookie;
+  let cookie = (reqOptions.headers as any).Cookie ||
+    (reqOptions.headers as any).cookie;
   reqOptions.headers = Object.assign(
     {
       "x-youtube-client-name": "1",
-      "x-youtube-client-version": "2.20201203.06.00",
+      "x-youtube-client-version": cver,
       "x-youtube-identity-token": cookieCache.get(cookie || "browser") || "",
     },
-    reqOptions.headers
+    reqOptions.headers,
   );
 
   const setIdentityToken = async (key: string, throwIfNotFound: boolean) => {
@@ -365,13 +369,14 @@ const getWatchHTMLPage = async (id: string, options: GetInfoOptions) => {
   let body = await getWatchHTMLPageBody(id, options);
   let info: any = { page: "watch" };
   try {
+    cver = utils.between(body, '{"key":"cver","value":"', '"}');
     info.player_response = findJSON(
       "watch.html",
       "player_response",
       body,
       /\bytInitialPlayerResponse\s*=\s*\{/i,
-      "\n",
-      "{"
+      "</script>",
+      "{",
     );
   } catch (err) {
     let args = findJSON(
@@ -380,7 +385,7 @@ const getWatchHTMLPage = async (id: string, options: GetInfoOptions) => {
       body,
       /\bytplayer\.config\s*=\s*{/,
       "</script>",
-      "{"
+      "{",
     );
     info.player_response = findPlayerResponse("watch.html", args);
   }
@@ -389,8 +394,8 @@ const getWatchHTMLPage = async (id: string, options: GetInfoOptions) => {
     "response",
     body,
     /\bytInitialData("\])?\s*=\s*\{/i,
-    "\n",
-    "{"
+    "</script>",
+    "{",
   );
   info.html5player = getHTML5player(body);
   return info;
@@ -406,6 +411,8 @@ const getVideoInfoPage = async (id: string, options: GetInfoOptions) => {
   url.searchParams.set("ps", "default");
   url.searchParams.set("gl", "US");
   url.searchParams.set("hl", options.lang || "en");
+  url.searchParams.set("c", "TVHTML5");
+  url.searchParams.set("cver", `7${cver.substr(1)}`);
   let body = await fetch(url.toString(), options).then((e) => e.text());
   let info = querystring.parse(body);
   info.player_response = findPlayerResponse("get_video_info", info);
@@ -431,11 +438,10 @@ const parseFormats = (player_response: any) => {
  */
 export const getInfo = async (
   id: string,
-  options: GetInfoOptions = {}
+  options: GetInfoOptions = {},
 ): Promise<VideoInfo> => {
   let info = await getBasicInfo(id, options);
-  const hasManifest =
-    info.player_response &&
+  const hasManifest = info.player_response &&
     info.player_response.streamingData &&
     (info.player_response.streamingData.dashManifestUrl ||
       info.player_response.streamingData.hlsManifestUrl);
@@ -491,17 +497,18 @@ const getDashManifest = (url: string, options: any) =>
               itag,
               url,
               bitrate: parseInt(node.attributes.BANDWIDTH as any),
-              mimeType: `${adaptationSet.MIMETYPE}; codecs="${node.attributes.CODECS}"`,
+              mimeType:
+                `${adaptationSet.MIMETYPE}; codecs="${node.attributes.CODECS}"`,
             },
             node.attributes.HEIGHT
               ? {
-                  width: parseInt(node.attributes.WIDTH as any),
-                  height: parseInt(node.attributes.HEIGHT as any),
-                  fps: parseInt(node.attributes.FRAMERATE as any),
-                }
+                width: parseInt(node.attributes.WIDTH as any),
+                height: parseInt(node.attributes.HEIGHT as any),
+                fps: parseInt(node.attributes.FRAMERATE as any),
+              }
               : {
-                  audioSampleRate: node.attributes.AUDIOSAMPLINGRATE,
-                }
+                audioSampleRate: node.attributes.AUDIOSAMPLINGRATE,
+              },
           );
         }
       }

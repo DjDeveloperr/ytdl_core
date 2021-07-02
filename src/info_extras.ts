@@ -38,7 +38,7 @@ export const getMedia = (info: any) => {
         if (runs && runs[0].navigationEndpoint) {
           media[`${title}_url`] = new URL(
             runs[0].navigationEndpoint.commandMetadata.webCommandMetadata.url,
-            BASE_URL
+            BASE_URL,
           ).toString();
         }
         if (title in TITLE_TO_CATEGORY) {
@@ -50,7 +50,7 @@ export const getMedia = (info: any) => {
         let boxArt = contents.filter(
           (meta: any) =>
             meta.richMetadataRenderer.style ===
-            "RICH_METADATA_RENDERER_STYLE_BOX_ART"
+              "RICH_METADATA_RENDERER_STYLE_BOX_ART",
         );
         for (let { richMetadataRenderer } of boxArt) {
           let meta = richMetadataRenderer;
@@ -59,21 +59,21 @@ export const getMedia = (info: any) => {
           media[type] = getText(meta.title);
           media[`${type}_url`] = new URL(
             meta.endpoint.commandMetadata.webCommandMetadata.url,
-            BASE_URL
+            BASE_URL,
           ).toString();
           media.thumbnails = meta.thumbnail.thumbnails;
         }
         let topic = contents.filter(
           (meta: any) =>
             meta.richMetadataRenderer.style ===
-            "RICH_METADATA_RENDERER_STYLE_TOPIC"
+              "RICH_METADATA_RENDERER_STYLE_TOPIC",
         );
         for (let { richMetadataRenderer } of topic) {
           let meta = richMetadataRenderer;
           media.category = getText(meta.title);
           media.category_url = new URL(
             meta.endpoint.commandMetadata.webCommandMetadata.url,
-            BASE_URL
+            BASE_URL,
           ).toString();
         }
       }
@@ -102,7 +102,7 @@ export const getAuthor = (info: any) => {
       (v2: any) =>
         v2.videoSecondaryInfoRenderer &&
         v2.videoSecondaryInfoRenderer.owner &&
-        v2.videoSecondaryInfoRenderer.owner.videoOwnerRenderer
+        v2.videoSecondaryInfoRenderer.owner.videoOwnerRenderer,
     );
     let videoOwnerRenderer =
       v.videoSecondaryInfoRenderer.owner.videoOwnerRenderer;
@@ -111,21 +111,19 @@ export const getAuthor = (info: any) => {
       (thumbnail: any) => {
         thumbnail.url = new URL(thumbnail.url, BASE_URL).toString();
         return thumbnail;
-      }
+      },
     );
     subscriberCount = utils.parseAbbreviatedNumber(
-      getText(videoOwnerRenderer.subscriberCountText)
+      getText(videoOwnerRenderer.subscriberCountText),
     );
     verified = isVerified(videoOwnerRenderer.badges);
   } catch (err) {
     // Do nothing.
   }
   try {
-    let videoDetails =
-      info.player_response.microformat &&
+    let videoDetails = info.player_response.microformat &&
       info.player_response.microformat.playerMicroformatRenderer;
-    let id =
-      (videoDetails && videoDetails.channelId) ||
+    let id = (videoDetails && videoDetails.channelId) ||
       channelId ||
       info.player_response.videoDetails.channelId;
     let author = {
@@ -163,7 +161,7 @@ const parseRelatedVideo = (details: any, rvsParams: any) => {
       shortViewCount = (rvsDetails && rvsDetails.short_view_count_text) || "";
     }
     viewCount = (/^\d/.test(viewCount) ? viewCount : shortViewCount).split(
-      " "
+      " ",
     )[0];
     let browseEndpoint =
       details.shortBylineText.runs[0].navigationEndpoint.browseEndpoint;
@@ -184,14 +182,14 @@ const parseRelatedVideo = (details: any, rvsParams: any) => {
           (thumbnail: any) => {
             thumbnail.url = new URL(thumbnail.url, BASE_URL).toString();
             return thumbnail;
-          }
+          },
         ),
         verified: isVerified(details.ownerBadges),
 
         [Symbol.toPrimitive]() {
           console.warn(
             `\`relatedVideo.author\` will be removed in a near future release, ` +
-              `use \`relatedVideo.author.name\` instead.`
+              `use \`relatedVideo.author.name\` instead.`,
           );
           return video.author.name;
         },
@@ -204,12 +202,12 @@ const parseRelatedVideo = (details: any, rvsParams: any) => {
       thumbnails: details.thumbnail.thumbnails,
       richThumbnails: details.richThumbnail
         ? details.richThumbnail.movingThumbnailRenderer.movingThumbnailDetails
-            .thumbnails
+          .thumbnails
         : [],
       isLive: !!(
         details.badges &&
         details.badges.find(
-          (b: any) => b.metadataBadgeRenderer.label === "LIVE NOW"
+          (b: any) => b.metadataBadgeRenderer.label === "LIVE NOW",
         )
       ),
     };
@@ -243,8 +241,8 @@ export const getRelatedVideos = (info: any) => {
       let video = parseRelatedVideo(details, rvsParams);
       if (video) videos.push(video);
     } else {
-      let autoplay =
-        result.compactAutoplayRenderer || result.itemSectionRenderer;
+      let autoplay = result.compactAutoplayRenderer ||
+        result.itemSectionRenderer;
       if (!autoplay || !Array.isArray(autoplay.contents)) continue;
       for (let content of autoplay.contents) {
         let video = parseRelatedVideo(content.compactVideoRenderer, rvsParams);
@@ -268,13 +266,14 @@ export const getLikes = (info: any) => {
     let like = buttons.find(
       (b: any) =>
         b.toggleButtonRenderer &&
-        b.toggleButtonRenderer.defaultIcon.iconType === "LIKE"
+        b.toggleButtonRenderer.defaultIcon.iconType === "LIKE",
     );
     return parseInt(
-      like.toggleButtonRenderer.defaultText.accessibility.accessibilityData.label.replace(
-        /\D+/g,
-        ""
-      )
+      like.toggleButtonRenderer.defaultText.accessibility.accessibilityData
+        .label.replace(
+          /\D+/g,
+          "",
+        ),
     );
   } catch (err) {
     return null;
@@ -291,13 +290,14 @@ export const getDislikes = (info: any) => {
     let dislike = buttons.find(
       (b: any) =>
         b.toggleButtonRenderer &&
-        b.toggleButtonRenderer.defaultIcon.iconType === "DISLIKE"
+        b.toggleButtonRenderer.defaultIcon.iconType === "DISLIKE",
     );
     return parseInt(
-      dislike.toggleButtonRenderer.defaultText.accessibility.accessibilityData.label.replace(
-        /\D+/g,
-        ""
-      )
+      dislike.toggleButtonRenderer.defaultText.accessibility.accessibilityData
+        .label.replace(
+          /\D+/g,
+          "",
+        ),
     );
   } catch (err) {
     return null;
@@ -307,24 +307,23 @@ export const getDislikes = (info: any) => {
 export const cleanVideoDetails = (videoDetails: any, info: any) => {
   videoDetails.thumbnails = videoDetails.thumbnail.thumbnails;
   delete videoDetails.thumbnail;
-  videoDetails.description =
-    videoDetails.shortDescription || getText(videoDetails.description);
+  videoDetails.description = videoDetails.shortDescription ||
+    getText(videoDetails.description);
   delete videoDetails.shortDescription;
 
   // Use more reliable `lengthSeconds` from `playerMicroformatRenderer`.
-  videoDetails.lengthSeconds =
-    info.player_response.microformat &&
-    info.player_response.microformat.playerMicroformatRenderer.lengthSeconds;
+  videoDetails.lengthSeconds = (info.player_response.microformat &&
+    info.player_response.microformat.playerMicroformatRenderer.lengthSeconds) ||
+    info.player_response.videoDetails.lengthSeconds;
   return videoDetails;
 };
 
 export const getStoryboards = (info: any) => {
-  const parts =
-    info.player_response.storyboards &&
+  const parts = info.player_response?.storyboards &&
     info.player_response.storyboards.playerStoryboardSpecRenderer &&
     info.player_response.storyboards.playerStoryboardSpecRenderer.spec &&
     info.player_response.storyboards.playerStoryboardSpecRenderer.spec.split(
-      "|"
+      "|",
     );
 
   if (!parts) return [];

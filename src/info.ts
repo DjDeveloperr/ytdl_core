@@ -6,6 +6,7 @@ import * as utils from "./utils.ts";
 import * as formatUtils from "./format_util.ts";
 import * as extras from "./info_extras.ts";
 import { GetInfoOptions, VideoInfo } from "./types.ts";
+import { request } from "./request.ts";
 
 let cver = "2.20210622.10.00";
 
@@ -141,7 +142,7 @@ const getWatchHTMLURL = (id: string, options: any) =>
 const getWatchHTMLPageBody = (id: string, options: any) => {
   const url = getWatchHTMLURL(id, options);
   return watchPageCache.getOrSet(url, () =>
-    fetch(url, options)
+    request(url, options)
       .then((r) => r.text())
       .then((t) => {
         return t;
@@ -151,7 +152,7 @@ const getWatchHTMLPageBody = (id: string, options: any) => {
 const EMBED_URL = "https://www.youtube.com/embed/";
 const getEmbedPageBody = (id: string, options: GetInfoOptions = {}) => {
   const embedUrl = `${EMBED_URL + id}?hl=${options.lang || "en"}`;
-  return fetch(embedUrl, options).then((e) => e.text());
+  return request(embedUrl, options).then((e) => e.text());
 };
 
 const getHTML5player = (body: string) => {
@@ -350,7 +351,7 @@ const getWatchJSONPage = async (id: string, options: GetInfoOptions) => {
   }
 
   const jsonUrl = getWatchJSONURL(id, options);
-  let body = await fetch(jsonUrl, reqOptions).then((e) => e.text());
+  let body = await request(jsonUrl, reqOptions).then((e) => e.text());
   let parsedBody = parseJSON("watch.json", "body", body);
   if (parsedBody.reload === "now") {
     await setIdentityToken("browser", false);
@@ -414,7 +415,7 @@ const getVideoInfoPage = async (id: string, options: GetInfoOptions) => {
   url.searchParams.set("c", "TVHTML5");
   url.searchParams.set("cver", `7${cver.substr(1)}`);
   url.searchParams.set("html5", "1");
-  let body = await fetch(url.toString(), options).then((e) => e.text());
+  let body = await request(url.toString(), options).then((e) => e.text());
   let info = querystring.parse(body);
   info.player_response = findPlayerResponse("get_video_info", info);
   return info;
@@ -517,7 +518,7 @@ const getDashManifest = (url: string, options: any) =>
     parser.onend = () => {
       resolve(formats);
     };
-    const req = fetch(new URL(url, BASE_URL).toString(), options);
+    const req = request(new URL(url, BASE_URL).toString(), options);
 
     req
       .then(async (res) => {
@@ -538,7 +539,7 @@ const getDashManifest = (url: string, options: any) =>
  */
 const getM3U8 = async (_url: string, options: any) => {
   let url = new URL(_url, BASE_URL);
-  let body = await fetch(url.toString(), options.requestOptions).then((e) =>
+  let body = await request(url.toString(), options.requestOptions).then((e) =>
     e.text()
   );
   let formats: any = {};

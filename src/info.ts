@@ -195,7 +195,7 @@ const pipeline = async (
   for (let func of endpoints) {
     try {
       const newInfo = await retryFunc(func, args.concat([info]), retryOptions);
-      if (newInfo.player_response) {
+      if (newInfo && newInfo.player_response) {
         newInfo.player_response.videoDetails = assign(
           info && info.player_response && info.player_response.videoDetails,
           newInfo.player_response.videoDetails,

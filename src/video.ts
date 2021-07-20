@@ -4,6 +4,7 @@ import { parseTimestamp } from "../deps.ts";
 import { getInfo } from "./info.ts";
 import { VideoStream } from "./stream.ts";
 import { DownloadOptions, VideoFormat } from "./types.ts";
+import { request } from "./request.ts";
 
 export interface VideoStreamSource {
   stream: VideoStream;
@@ -38,7 +39,7 @@ function createVideoStreamSource(): VideoStreamSource {
 async function downloadFromInfoInto(
   { stream, push, close }: VideoStreamSource,
   info: any,
-  options: DownloadOptions = {}
+  options: DownloadOptions = {},
 ) {
   let err = utils.playError(info.player_response, [
     "UNPLAYABLE",
@@ -101,8 +102,8 @@ async function downloadFromInfoInto(
       backoff: { inc: 500, max: 10000 },
     });
 
-    let shouldBeChunked =
-      dlChunkSize !== 0 && (!format.hasAudio || !format.hasVideo);
+    let shouldBeChunked = dlChunkSize !== 0 &&
+      (!format.hasAudio || !format.hasVideo);
 
     if (shouldBeChunked) {
       let start = (options.range && options.range.start) || 0;
@@ -124,7 +125,7 @@ async function downloadFromInfoInto(
           Range: `bytes=${start}-${end || ""}`,
         });
 
-        req = await fetch(format.url, requestOptions);
+        req = await request(format.url, requestOptions);
 
         for await (const chunk of req.body!) {
           stream.downloaded += chunk.length;
@@ -144,20 +145,21 @@ async function downloadFromInfoInto(
     } else {
       // Audio only and video only formats don't support begin
       if (options.begin) {
-        format.url += `&begin=${parseTimestamp(
-          typeof options.begin === "object"
-            ? options.begin.getTime()
-            : options.begin
-        )}`;
+        format.url += `&begin=${
+          parseTimestamp(
+            typeof options.begin === "object"
+              ? options.begin.getTime()
+              : options.begin,
+          )
+        }`;
       }
       if (options.range && (options.range.start || options.range.end)) {
         requestOptions.headers = Object.assign({}, requestOptions.headers, {
-          Range: `bytes=${options.range.start || "0"}-${
-            options.range.end || ""
-          }`,
+          Range: `bytes=${options.range.start || "0"}-${options.range.end ||
+            ""}`,
         });
       }
-      req = await fetch(format.url, requestOptions);
+      req = await request(format.url, requestOptions);
       contentLength = parseInt(format.contentLength);
 
       stream.total = contentLength;
@@ -175,7 +177,7 @@ async function downloadFromInfoInto(
 
 export async function downloadFromInfo(
   info: any,
-  options: DownloadOptions = {}
+  options: DownloadOptions = {},
 ) {
   const src = createVideoStreamSource();
   await downloadFromInfoInto(src, info, options);

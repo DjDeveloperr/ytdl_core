@@ -1,5 +1,6 @@
 import { querystring } from "../deps.ts";
 import { Cache } from "./cache.ts";
+import { request } from "./request.ts";
 
 export const cache = new Cache();
 
@@ -41,7 +42,7 @@ export const decipher = (tokens: string[], _sig: string) => {
 
 export function getTokens(file: string, options: RequestInit = {}) {
   return cache.getOrSet(file, async () => {
-    let body = await fetch(file, options).then((e) => e.text());
+    let body = await request(file, options).then((e) => e.text());
     const tokens = extractActions(body);
     if (!tokens || !tokens.length) {
       throw Error("Could not extract signature deciphering actions");
@@ -58,25 +59,22 @@ const jsQuoteStr = `(?:${jsSingleQuoteStr}|${jsDoubleQuoteStr})`;
 const jsKeyStr = `(?:${jsVarStr}|${jsQuoteStr})`;
 const jsPropStr = `(?:\\.${jsVarStr}|\\[${jsQuoteStr}\\])`;
 const jsEmptyStr = `(?:''|"")`;
-const reverseStr =
-  ":function\\(a\\)\\{" + "(?:return )?a\\.reverse\\(\\)" + "\\}";
+const reverseStr = ":function\\(a\\)\\{" + "(?:return )?a\\.reverse\\(\\)" +
+  "\\}";
 const sliceStr = ":function\\(a,b\\)\\{" + "return a\\.slice\\(b\\)" + "\\}";
 const spliceStr = ":function\\(a,b\\)\\{" + "a\\.splice\\(0,b\\)" + "\\}";
-const swapStr =
-  ":function\\(a,b\\)\\{" +
+const swapStr = ":function\\(a,b\\)\\{" +
   "var c=a\\[0\\];a\\[0\\]=a\\[b(?:%a\\.length)?\\];a\\[b(?:%a\\.length)?\\]=c(?:;return a)?" +
   "\\}";
 const actionsObjRegexp = new RegExp(
-  `var (${jsVarStr})=\\{((?:(?:${jsKeyStr}${reverseStr}|${jsKeyStr}${sliceStr}|${jsKeyStr}${spliceStr}|${jsKeyStr}${swapStr}),?\\r?\\n?)+)\\};`
+  `var (${jsVarStr})=\\{((?:(?:${jsKeyStr}${reverseStr}|${jsKeyStr}${sliceStr}|${jsKeyStr}${spliceStr}|${jsKeyStr}${swapStr}),?\\r?\\n?)+)\\};`,
 );
 const actionsFuncRegexp = new RegExp(
-  `${
-    `function(?: ${jsVarStr})?\\(a\\)\\{` +
+  `${`function(?: ${jsVarStr})?\\(a\\)\\{` +
     `a=a\\.split\\(${jsEmptyStr}\\);\\s*` +
-    `((?:(?:a=)?${jsVarStr}`
-  }${jsPropStr}\\(a,\\d+\\);)+)` +
+    `((?:(?:a=)?${jsVarStr}`}${jsPropStr}\\(a,\\d+\\);)+)` +
     `return a\\.join\\(${jsEmptyStr}\\)` +
-    `\\}`
+    `\\}`,
 );
 const reverseRegexp = new RegExp(`(?:^|,)(${jsKeyStr})${reverseStr}`, "m");
 const sliceRegexp = new RegExp(`(?:^|,)(${jsKeyStr})${sliceStr}`, "m");
@@ -95,21 +93,20 @@ export const extractActions = (body: string) => {
   const funcBody = funcResult[1].replace(/\$/g, "\\$");
 
   let result = reverseRegexp.exec(objBody);
-  const reverseKey =
-    result && result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
+  const reverseKey = result &&
+    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
   result = sliceRegexp.exec(objBody);
-  const sliceKey =
-    result && result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
+  const sliceKey = result &&
+    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
   result = spliceRegexp.exec(objBody);
-  const spliceKey =
-    result && result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
+  const spliceKey = result &&
+    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
   result = swapRegexp.exec(objBody);
-  const swapKey =
-    result && result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
+  const swapKey = result &&
+    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
 
   const keys = `(${[reverseKey, sliceKey, spliceKey, swapKey].join("|")})`;
-  const myreg =
-    `(?:a=)?${obj}(?:\\.${keys}|\\['${keys}'\\]|\\["${keys}"\\])` +
+  const myreg = `(?:a=)?${obj}(?:\\.${keys}|\\['${keys}'\\]|\\["${keys}"\\])` +
     `\\(a,(\\d+)\\)`;
   const tokenizeRegexp = new RegExp(myreg, "g");
   const tokens = [];
@@ -167,7 +164,7 @@ export const setDownloadURL = (format: any, sig: string) => {
 export const decipherFormats = async (
   formats: any[],
   html5player: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ) => {
   let decipheredFormats: any = {};
   let tokens = await getTokens(html5player, options);

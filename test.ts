@@ -10,5 +10,5 @@ for await (const chunk of stream) {
 }
 
 const blob = new Blob(chunks);
-console.log("Saving...");
+console.log("Saving as video.mp4...");
 await Deno.writeFile("video.mp4", new Uint8Array(await blob.arrayBuffer()));

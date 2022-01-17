@@ -171,7 +171,7 @@ export const decipherFormats = async (
   formats.forEach((format) => {
     let cipher = format.signatureCipher || format.cipher;
     if (cipher) {
-      Object.assign(format, querystring.parse(cipher));
+      Object.assign(format, querystring.decode(cipher));
       delete format.signatureCipher;
       delete format.cipher;
     }

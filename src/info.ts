@@ -416,7 +416,7 @@ const getVideoInfoPage = async (id: string, options: GetInfoOptions) => {
   url.searchParams.set("cver", `7${cver.substr(1)}`);
   url.searchParams.set("html5", "1");
   let body = await request(url.toString(), options).then((e) => e.text());
-  let info = querystring.parse(body);
+  let info = querystring.decode(body);
   info.player_response = findPlayerResponse("get_video_info", info);
   return info;
 };

@@ -5,8 +5,6 @@ export * from "./src/info.ts";
 export * from "./src/info_extras.ts";
 export * from "./src/url_utils.ts";
 export {
-  decipher,
-  extractActions,
   decipherFormats,
   setDownloadURL,
   cache as sigCache,

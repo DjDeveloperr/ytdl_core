@@ -138,13 +138,17 @@ export async function decipherFormats(
   let decipheredFormats: any = {};
   let functions = await getFunctions(html5player, options);
   const decipherScript = functions.length
-    ? new Function("sig", functions[0])
+    ? createFunc(functions[0], "sig")
     : undefined;
   const nTransformScript =
-    functions.length > 1 ? new Function("ncode", functions[1]) : undefined;
+    functions.length > 1 ? createFunc(functions[1], "ncode") : undefined;
   formats.forEach((format) => {
     setDownloadURL(format, decipherScript as any, nTransformScript as any);
     decipheredFormats[format.url] = format;
   });
   return decipheredFormats;
+}
+
+function createFunc(source: string, ...params: string[]) {
+  return new Function(...params, `return eval(\`${source}\`)`);
 }

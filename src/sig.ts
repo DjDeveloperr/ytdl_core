@@ -1,183 +1,154 @@
 import { querystring } from "../deps.ts";
 import { Cache } from "./cache.ts";
+import { between, cutAfterJSON } from "./utils.ts";
 import { request } from "./request.ts";
 
+// A shared cache to keep track of html5player js functions.
 export const cache = new Cache();
 
 /**
- * Swaps the first element of an array with one of given position.
+ * Extract signature deciphering and n parameter transform functions from html5player file.
+ *
+ * @param {string} html5playerfile
+ * @param {Object} options
+ * @returns {Promise<Array.<string>>}
  */
-const swapHeadAndPosition = (arr: any[], position: number) => {
-  const first = arr[0];
-  arr[0] = arr[position % arr.length];
-  arr[position] = first;
-  return arr;
-};
-
-export const decipher = (tokens: string[], _sig: string) => {
-  let sig = _sig.split("");
-  for (let i = 0, len = tokens.length; i < len; i++) {
-    let token = tokens[i],
-      pos;
-    switch (token[0]) {
-      case "r":
-        sig = sig.reverse();
-        break;
-      case "w":
-        pos = ~~token.slice(1);
-        sig = swapHeadAndPosition(sig, pos);
-        break;
-      case "s":
-        pos = ~~token.slice(1);
-        sig = sig.slice(pos);
-        break;
-      case "p":
-        pos = ~~token.slice(1);
-        sig.splice(0, pos);
-        break;
+export function getFunctions(
+  html5playerfile: string,
+  options: RequestInit
+): string[] {
+  return cache.getOrSet(html5playerfile, async () => {
+    const res = await request(html5playerfile, options);
+    const body = await res.text();
+    const functions = extractFunctions(body);
+    if (!functions || !functions.length) {
+      throw Error("Could not extract functions");
     }
-  }
-  return sig.join("");
-};
-
-export function getTokens(file: string, options: RequestInit = {}) {
-  return cache.getOrSet(file, async () => {
-    let body = await request(file, options).then((e) => e.text());
-    const tokens = extractActions(body);
-    if (!tokens || !tokens.length) {
-      throw Error("Could not extract signature deciphering actions");
-    }
-    cache.set(file, tokens);
-    return tokens;
+    cache.set(html5playerfile, functions);
+    return functions;
   });
 }
 
-const jsVarStr = "[a-zA-Z_\\$][a-zA-Z_0-9]*";
-const jsSingleQuoteStr = `'[^'\\\\]*(:?\\\\[\\s\\S][^'\\\\]*)*'`;
-const jsDoubleQuoteStr = `"[^"\\\\]*(:?\\\\[\\s\\S][^"\\\\]*)*"`;
-const jsQuoteStr = `(?:${jsSingleQuoteStr}|${jsDoubleQuoteStr})`;
-const jsKeyStr = `(?:${jsVarStr}|${jsQuoteStr})`;
-const jsPropStr = `(?:\\.${jsVarStr}|\\[${jsQuoteStr}\\])`;
-const jsEmptyStr = `(?:''|"")`;
-const reverseStr = ":function\\(a\\)\\{" + "(?:return )?a\\.reverse\\(\\)" +
-  "\\}";
-const sliceStr = ":function\\(a,b\\)\\{" + "return a\\.slice\\(b\\)" + "\\}";
-const spliceStr = ":function\\(a,b\\)\\{" + "a\\.splice\\(0,b\\)" + "\\}";
-const swapStr = ":function\\(a,b\\)\\{" +
-  "var c=a\\[0\\];a\\[0\\]=a\\[b(?:%a\\.length)?\\];a\\[b(?:%a\\.length)?\\]=c(?:;return a)?" +
-  "\\}";
-const actionsObjRegexp = new RegExp(
-  `var (${jsVarStr})=\\{((?:(?:${jsKeyStr}${reverseStr}|${jsKeyStr}${sliceStr}|${jsKeyStr}${spliceStr}|${jsKeyStr}${swapStr}),?\\r?\\n?)+)\\};`,
-);
-const actionsFuncRegexp = new RegExp(
-  `${`function(?: ${jsVarStr})?\\(a\\)\\{` +
-    `a=a\\.split\\(${jsEmptyStr}\\);\\s*` +
-    `((?:(?:a=)?${jsVarStr}`}${jsPropStr}\\(a,\\d+\\);)+)` +
-    `return a\\.join\\(${jsEmptyStr}\\)` +
-    `\\}`,
-);
-const reverseRegexp = new RegExp(`(?:^|,)(${jsKeyStr})${reverseStr}`, "m");
-const sliceRegexp = new RegExp(`(?:^|,)(${jsKeyStr})${sliceStr}`, "m");
-const spliceRegexp = new RegExp(`(?:^|,)(${jsKeyStr})${spliceStr}`, "m");
-const swapRegexp = new RegExp(`(?:^|,)(${jsKeyStr})${swapStr}`, "m");
-
-export const extractActions = (body: string) => {
-  const objResult = actionsObjRegexp.exec(body);
-  const funcResult = actionsFuncRegexp.exec(body);
-  if (!objResult || !funcResult) {
-    return null;
-  }
-
-  const obj = objResult[1].replace(/\$/g, "\\$");
-  const objBody = objResult[2].replace(/\$/g, "\\$");
-  const funcBody = funcResult[1].replace(/\$/g, "\\$");
-
-  let result = reverseRegexp.exec(objBody);
-  const reverseKey = result &&
-    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
-  result = sliceRegexp.exec(objBody);
-  const sliceKey = result &&
-    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
-  result = spliceRegexp.exec(objBody);
-  const spliceKey = result &&
-    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
-  result = swapRegexp.exec(objBody);
-  const swapKey = result &&
-    result[1].replace(/\$/g, "\\$").replace(/\$|^'|^"|'$|"$/g, "");
-
-  const keys = `(${[reverseKey, sliceKey, spliceKey, swapKey].join("|")})`;
-  const myreg = `(?:a=)?${obj}(?:\\.${keys}|\\['${keys}'\\]|\\["${keys}"\\])` +
-    `\\(a,(\\d+)\\)`;
-  const tokenizeRegexp = new RegExp(myreg, "g");
-  const tokens = [];
-  while ((result = tokenizeRegexp.exec(funcBody)) !== null) {
-    let key = result[1] || result[2] || result[3];
-    switch (key) {
-      case swapKey:
-        tokens.push(`w${result[4]}`);
-        break;
-      case reverseKey:
-        tokens.push("r");
-        break;
-      case sliceKey:
-        tokens.push(`s${result[4]}`);
-        break;
-      case spliceKey:
-        tokens.push(`p${result[4]}`);
-        break;
+/**
+ * Extracts the actions that should be taken to decipher a signature
+ * and tranform the n parameter
+ *
+ * @param {string} body
+ * @returns {Array.<string>}
+ */
+export function extractFunctions(body: string) {
+  const functions: string[] = [];
+  const extractManipulations = (caller: string) => {
+    const functionName = between(caller, `a=a.split("");`, `.`);
+    if (!functionName) return "";
+    const functionStart = `var ${functionName}={`;
+    const ndx = body.indexOf(functionStart);
+    if (ndx < 0) return "";
+    const subBody = body.slice(ndx + functionStart.length - 1);
+    return `var ${functionName}=${cutAfterJSON(subBody)}`;
+  };
+  const extractDecipher = () => {
+    const functionName = between(
+      body,
+      `a.set("alr","yes");c&&(c=`,
+      `(decodeURIC`
+    );
+    if (functionName && functionName.length) {
+      const functionStart = `${functionName}=function(a)`;
+      const ndx = body.indexOf(functionStart);
+      if (ndx >= 0) {
+        const subBody = body.slice(ndx + functionStart.length);
+        let functionBody = `var ${functionStart}${cutAfterJSON(subBody)}`;
+        functionBody = `${extractManipulations(
+          functionBody
+        )};${functionBody};${functionName}(sig);`;
+        functions.push(functionBody);
+      }
     }
-  }
-  return tokens;
-};
+  };
+  const extractNCode = () => {
+    let functionName = between(body, `&&(b=a.get("n"))&&(b=`, `(b)`);
+    if (functionName.includes("["))
+      functionName = between(body, `${functionName.split("[")[0]}=[`, `]`);
+    if (functionName && functionName.length) {
+      const functionStart = `${functionName}=function(a)`;
+      const ndx = body.indexOf(functionStart);
+      if (ndx >= 0) {
+        const subBody = body.slice(ndx + functionStart.length);
+        const functionBody = `var ${functionStart}${cutAfterJSON(
+          subBody
+        )};${functionName}(ncode);`;
+        functions.push(functionBody);
+      }
+    }
+  };
+  extractDecipher();
+  extractNCode();
+  return functions;
+}
 
-export const setDownloadURL = (format: any, sig: string) => {
-  let decodedUrl;
-  if (format.url) {
-    decodedUrl = format.url;
-  } else {
-    return;
-  }
+/**
+ * Apply decipher and n-transform to individual format
+ *
+ * @param {Object} format
+ * @param {vm.Script} decipherScript
+ * @param {vm.Script} nTransformScript
+ */
+export function setDownloadURL(
+  format: any,
+  decipherScript: ((sig: string) => string) | undefined,
+  nTransformScript: ((ncode: string) => string) | undefined
+) {
+  const decipher = (url: string) => {
+    const args = querystring.parse(url) as any;
+    if (!args.s || !decipherScript) return args.url;
+    const components = new URL(decodeURIComponent(args.url));
+    components.searchParams.set(
+      args.sp ? args.sp : "signature",
+      decipherScript(decodeURIComponent(args.s))
+    );
+    return components.toString();
+  };
+  const ncode = (url: string) => {
+    const components = new URL(decodeURIComponent(url));
+    const n = components.searchParams.get("n");
+    if (!n || !nTransformScript) return url;
+    components.searchParams.set("n", nTransformScript(n));
+    return components.toString();
+  };
+  const cipher = !format.url;
+  const url = format.url || format.signatureCipher || format.cipher;
+  format.url = cipher ? ncode(decipher(url)) : ncode(url);
+  delete format.signatureCipher;
+  delete format.cipher;
+}
 
-  try {
-    decodedUrl = decodeURIComponent(decodedUrl);
-  } catch (err) {
-    return;
-  }
-
-  // Make some adjustments to the final url.
-  const parsedUrl = new URL(decodedUrl);
-
-  // This is needed for a speedier download.
-  // See https://github.com/fent/node-ytdl-core/issues/127
-  parsedUrl.searchParams.set("ratebypass", "yes");
-
-  if (sig) {
-    // When YouTube provides a `sp` parameter the signature `sig` must go
-    // into the parameter it specifies.
-    // See https://github.com/fent/node-ytdl-core/issues/417
-    parsedUrl.searchParams.set(format.sp || "signature", sig);
-  }
-
-  format.url = parsedUrl.toString();
-};
-
-export const decipherFormats = async (
+/**
+ * Applies decipher and n parameter transforms to all format URL's.
+ *
+ * @param {Array.<Object>} formats
+ * @param {string} html5player
+ * @param {Object} options
+ */
+export async function decipherFormats(
   formats: any[],
   html5player: string,
-  options: RequestInit = {},
-) => {
+  options: any
+) {
   let decipheredFormats: any = {};
-  let tokens = await getTokens(html5player, options);
+  let functions = await getFunctions(html5player, options);
+  const decipherScript = functions.length
+    ? createFunc(functions[0], "sig")
+    : undefined;
+  const nTransformScript =
+    functions.length > 1 ? createFunc(functions[1], "ncode") : undefined;
   formats.forEach((format) => {
-    let cipher = format.signatureCipher || format.cipher;
-    if (cipher) {
-      Object.assign(format, querystring.decode(cipher));
-      delete format.signatureCipher;
-      delete format.cipher;
-    }
-    const sig = tokens && format.s ? decipher(tokens, format.s) : null;
-    setDownloadURL(format, sig!);
+    setDownloadURL(format, decipherScript as any, nTransformScript as any);
     decipheredFormats[format.url] = format;
   });
   return decipheredFormats;
-};
+}
+
+function createFunc(source: string, ...params: string[]) {
+  return new Function(...params, `return eval(\`${source}\`)`);
+}

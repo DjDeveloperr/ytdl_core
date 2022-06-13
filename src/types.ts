@@ -111,6 +111,8 @@ export interface DownloadOptions extends GetInfoOptions, ChooseFormatOptions {
   };
   begin?: string | number | Date;
   dlChunkSize?: number;
+  IPv6Block?: string;
+  requestOptions?: any;
 }
 
 export interface Thumbnail {

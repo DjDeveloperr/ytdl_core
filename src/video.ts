@@ -1,6 +1,6 @@
 import * as utils from "./utils.ts";
 import * as formatUtils from "./format_util.ts";
-import { parseTimestamp } from "../deps.ts";
+import { parseTimestamp, m3u8stream } from "../deps.ts";
 import { getInfo } from "./info.ts";
 import { VideoStream } from "./stream.ts";
 import { DownloadOptions, VideoFormat } from "./types.ts";
@@ -14,12 +14,12 @@ export interface VideoStreamSource {
 
 function createVideoStreamSource(): VideoStreamSource {
   const src: any = {
-    stream: null,
+    stream: undefined,
     push: () => {},
     close: () => {},
   };
 
-  src.stream = new ReadableStream({
+  src.stream = new VideoStream({
     start: (controller) => {
       src.controller = controller;
       src.push = (data: Uint8Array) => {
@@ -77,24 +77,31 @@ async function downloadFromInfoInto(
     await push(chunk);
   };
 
+  if (options.IPv6Block) {
+    options.requestOptions = Object.assign({}, options.requestOptions, {
+      family: 6,
+      localAddress: utils.getRandomIPv6(options.IPv6Block),
+    });
+  }
+
   const dlChunkSize = options.dlChunkSize || 1024 * 1024 * 10;
   let req: Response;
   let shouldEnd = true;
-
   if (format.isHLS || format.isDashMPD) {
-    throw new Error("HLS or DASH MPD not implemented");
-    // req = m3u8stream(format.url, {
-    //   chunkReadahead: +info.live_chunk_readahead,
-    //   begin: options.begin || (format.isLive && Date.now()),
-    //   liveBuffer: options.liveBuffer,
-    //   requestOptions: options.requestOptions,
-    //   parser: format.isDashMPD ? "dash-mpd" : "m3u8",
-    //   id: format.itag,
-    // });
-    // req.on("progress", (segment, totalSegments) => {
-    //   stream.emit("progress", segment.size, segment.num, totalSegments);
-    // });
-    // pipeAndSetEvents(req, stream, shouldEnd);
+    const begin = options.begin || (format.isLive && Date.now());
+    const req = m3u8stream(format.url, {
+      chunkReadahead: +info.live_chunk_readahead,
+      begin: begin.toString(),
+      requestOptions: options.requestOptions,
+      parser: format.isDashMPD ? "dash-mpd" : "m3u8",
+      id: format.itag.toString(),
+    });
+    req.addListener("data", async (chunk) => {
+      await push(chunk);
+    });
+    req.addListener("end", async () => {
+      await close();
+    });
   } else {
     const requestOptions = Object.assign({}, options, {
       maxReconnects: 6,

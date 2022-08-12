@@ -74,10 +74,10 @@ export function extractFunctions(body: string) {
       const functionStart = `${functionName}=function(a)`;
       const ndx = body.indexOf(functionStart);
       if (ndx >= 0) {
-        const subBody = body.slice(ndx + functionStart.length);
-        const functionBody = `var ${functionStart}${cutAfterJSON(
-          subBody
-        )};${functionName}(ncode);`;
+        const end = body.indexOf('.join("")};', ndx);
+        const subBody = body.slice(ndx, end);
+
+        const functionBody = `${subBody}.join("")};${functionName}(ncode);`;
         functions.push(functionBody);
       }
     }
@@ -135,20 +135,16 @@ export async function decipherFormats(
   html5player: string,
   options: any
 ) {
-  let decipheredFormats: any = {};
-  let functions = await getFunctions(html5player, options);
+  const decipheredFormats: any = {};
+  const functions = await getFunctions(html5player, options);
   const decipherScript = functions.length
-    ? createFunc(functions[0], "sig")
+    ? new Function("sig", functions[0])
     : undefined;
   const nTransformScript =
-    functions.length > 1 ? createFunc(functions[1], "ncode") : undefined;
+    functions.length > 1 ? new Function("ncode", functions[1]) : undefined;
   formats.forEach((format) => {
     setDownloadURL(format, decipherScript as any, nTransformScript as any);
     decipheredFormats[format.url] = format;
   });
   return decipheredFormats;
-}
-
-function createFunc(source: string, ...params: string[]) {
-  return new Function(...params, `return eval(\`${source}\`)`);
 }

@@ -23,12 +23,22 @@ function createVideoStreamSource(): VideoStreamSource {
     start: (controller) => {
       src.controller = controller;
       src.push = (data: Uint8Array) => {
-        controller.enqueue(data);
+        if (src.closed) return;
+        try {
+          controller.enqueue(data);
+        } catch(_e) {
+          src.closed = true;
+        }
       };
       src.close = () => {
+        if (src.closed) return;
         try {
           controller.close();
-        } catch (e) {}
+        } catch (_e) {
+          // ignore
+        } finally {
+          src.closed = true;
+        }
       };
     },
   });

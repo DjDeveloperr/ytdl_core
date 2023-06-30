@@ -1,6 +1,6 @@
 import ytdl from "./mod.ts";
 
-const stream = await ytdl("vRXZj0DzXIA");
+const stream = await ytdl("9EtbggRB51g");
 console.log("Size:", stream.total);
 
 const chunks: Uint8Array[] = [];

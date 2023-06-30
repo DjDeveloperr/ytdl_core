@@ -1,4 +1,3 @@
-import { querystring } from "../deps.ts";
 import { Cache } from "./cache.ts";
 import { between, cutAfterJSON } from "./utils.ts";
 import { request } from "./request.ts";
@@ -100,12 +99,12 @@ export function setDownloadURL(
   nTransformScript: ((ncode: string) => string) | undefined
 ) {
   const decipher = (url: string) => {
-    const args = querystring.parse(url) as any;
-    if (!args.s || !decipherScript) return args.url;
-    const components = new URL(decodeURIComponent(args.url));
+    const args = new URLSearchParams(url) as any;
+    if (!args.has('s') || !decipherScript) return args.get('url');
+    const components = new URL(decodeURIComponent(args.get('url')));
     components.searchParams.set(
-      args.sp ? args.sp : "signature",
-      decipherScript(decodeURIComponent(args.s))
+      args.has('sp') ? args.get('sp') : "signature",
+      decipherScript(decodeURIComponent(args.get('s')))
     );
     return components.toString();
   };

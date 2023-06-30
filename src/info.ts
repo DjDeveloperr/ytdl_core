@@ -1,4 +1,4 @@
-import { querystring, sax } from "../deps.ts";
+import { sax } from "../deps.ts";
 import { Cache } from "./cache.ts";
 import * as sig from "./sig.ts";
 import * as urlUtils from "./url_utils.ts";
@@ -416,7 +416,7 @@ const getVideoInfoPage = async (id: string, options: GetInfoOptions) => {
   url.searchParams.set("cver", `7${cver.substr(1)}`);
   url.searchParams.set("html5", "1");
   let body = await request(url.toString(), options).then((e) => e.text());
-  let info = querystring.decode(body);
+  let info = Object.fromEntries([ ... new URLSearchParams(body).entries() ]);
   info.player_response = findPlayerResponse("get_video_info", info);
   return info;
 };

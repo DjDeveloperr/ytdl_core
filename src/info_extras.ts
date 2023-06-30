@@ -1,4 +1,4 @@
-import { parseTimestamp, querystring as qs } from "../deps.ts";
+import { parseTimestamp } from "../deps.ts";
 import * as utils from "./utils.ts";
 
 const BASE_URL = "https://www.youtube.com/watch?v=";
@@ -223,7 +223,9 @@ export const getRelatedVideos = (info: any) => {
   try {
     rvsParams = info.response.webWatchNextResponseExtensionData.relatedVideoArgs
       .split(",")
-      .map((e: any) => qs.parse(e));
+      .map((e: any) => new URLSearchParams(e))
+      .map(( params ) => [ ... params.entries() ] )
+      .map(( params ) => Object.fromEntries(params) );
   } catch (err) {
     // Do nothing.
   }
